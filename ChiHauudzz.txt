@@ -1,8 +1,8 @@
--- [[ CHII HAUU HUB - FINAL PROTECTED ]]
+-- [[ CHII HAUU HUB - FINAL SMOOTH & PROTECTED ]]
 local _PROTECT = {
-    ["K"] = {67, 104, 105, 105, 72, 97, 117, 100, 122}, -- ChiiHaudz
+    ["K"] = {67, 104, 105, 105, 72, 97, 117, 100, 122}, -- Key: ChiiHaudz
     ["URL"] = "https://sirius.menu/rayfield",
-    ["S"] = 150
+    ["S"] = 175 -- Tăng tốc độ bay nhẹ để tối ưu thời gian
 }
 
 local function _DECODE(b)
@@ -24,25 +24,38 @@ local CT = nil
 local PLR = game.Players.LocalPlayer
 local RUN = game:GetService("RunService")
 
--- Chống giật & Trọng lực
-local function _GITTER()
+-- HÀM FIX GIẬT: Triệt tiêu mọi lực vật lý gây rung lắc
+local function _FIX_PHYSICS()
     pcall(function()
-        local r = PLR.Character and PLR.Character:FindFirstChild("HumanoidRootPart")
-        if r then
-            if not r:FindFirstChild("ChiiHauu_BV") then
-                local bv = Instance.new("BodyVelocity")
-                bv.Name = "ChiiHauu_BV"
-                bv.Velocity = Vector3.new(0, 0, 0)
-                bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-                bv.Parent = r
+        local char = PLR.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            -- Xóa bỏ các lực cũ để tránh xung đột
+            for _, v in pairs(root:GetChildren()) do
+                if v.Name == "ChiiHauu_BV" or v:IsA("BodyVelocity") or v:IsA("BodyGyro") then 
+                    v:Destroy() 
+                end
             end
+            -- Tạo lực giữ thăng bằng tuyệt đối
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = "ChiiHauu_BV"
+            bv.Velocity = Vector3.new(0, 0, 0)
+            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            bv.Parent = root
+            
+            local bg = Instance.new("BodyGyro")
+            bg.Name = "ChiiHauu_BG"
+            bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            bg.P = 3000
+            bg.CFrame = root.CFrame
+            bg.Parent = root
         end
     end)
 end
 
--- Tự động đổi Server
+-- HÀM SERVER HOP: Chuyển vùng khi hết rương
 local function _HOP()
-    Rayfield:Notify({Title = "HỆ THỐNG", Content = "Đang đổi Server mới...", Duration = 5})
+    Rayfield:Notify({Title = "HẾT RƯƠNG", Content = "Đang quét server khác để tiếp tục...", Duration = 5})
     local HTTP = game:GetService("HttpService")
     local TELE = game:GetService("TeleportService")
     pcall(function()
@@ -56,33 +69,34 @@ local function _HOP()
     end)
 end
 
--- Bay mượt
+-- HÀM BAY TWEEN: Tính toán đường bay thẳng và mượt
 local function _TWEEN(cf)
     local root = PLR.Character and PLR.Character:FindFirstChild("HumanoidRootPart")
     if root then
-        _GITTER()
+        _FIX_PHYSICS()
         if CT then CT:Cancel() end
         local dist = (root.Position - cf.Position).Magnitude
+        -- Sử dụng Linear để bay đều tốc độ, không bị khựng lúc đầu/cuối
         CT = TS:Create(root, TweenInfo.new(dist/_G.FarmSpeed, Enum.EasingStyle.Linear), {CFrame = cf})
         CT:Play()
     end
 end
 
--- Tìm rương thông minh (Fix lag)
+-- HÀM TÌM RƯƠNG: Ưu tiên rương gần và rương chưa mở
 local function _FIND()
     local t, m = nil, math.huge
     local char = PLR.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local p = char.HumanoidRootPart.Position
 
-    -- Quét rương nhanh
+    -- Quét rương trong Workspace (Nhanh)
     for _, v in pairs(game.Workspace:GetChildren()) do
         if v.Name:find("Chest") and v:IsA("BasePart") then
             local d = (v.Position - p).Magnitude
             if d < m then m = d; t = v end
         end
     end
-    -- Quét rương ẩn nếu rương ngoài đã hết
+    -- Quét rương ẩn sâu (Nếu rương ngoài đã hết)
     if not t then
         for _, v in pairs(game.Workspace:GetDescendants()) do
             if v.Name:find("Chest") and v:IsA("BasePart") then
@@ -94,26 +108,31 @@ local function _FIND()
     return t
 end
 
+-- VÒNG LẶP CHÍNH
 function _START()
     task.spawn(function()
         while _G.AutoFarmChest do
-            task.wait()
-            local success, err = pcall(function()
+            task.wait(0.1)
+            pcall(function()
                 local root = PLR.Character and PLR.Character:FindFirstChild("HumanoidRootPart")
                 if root then
                     local chest = _FIND()
                     if chest then
                         _G.IsTeleporting = true
-                        _TWEEN(chest.CFrame * CFrame.new(0, 4, 0))
+                        -- Bay lên cao hơn rương 5 unit để tránh kẹt địa hình
+                        _TWEEN(chest.CFrame * CFrame.new(0, 5, 0))
+                        
+                        -- Chờ nhặt rương (Check liên tục)
                         while chest and chest.Parent and _G.AutoFarmChest do
                             if (chest.Position - root.Position).Magnitude < 15 then break end
                             task.wait()
                         end
                     else
+                        -- Không còn rương nào -> Dọn dẹp và nhảy server
                         _G.IsTeleporting = false
                         if CT then CT:Cancel() end
                         _HOP()
-                        _G.AutoFarmChest = false -- Tạm dừng để nhảy server
+                        _G.AutoFarmChest = false
                     end
                 end
             end)
@@ -121,22 +140,29 @@ function _START()
     end)
 end
 
--- Noclip & State Fix
+-- NOCLIP VĨNH VIỄN & FIX TRẠNG THÁI
 RUN.Stepped:Connect(function()
     if _G.AutoFarmChest or _G.IsTeleporting then
         pcall(function()
             local c = PLR.Character
-            for _, v in pairs(c:GetDescendants()) do
-                if v:IsA("BasePart") then v.CanCollide = false end
+            if c then
+                for _, v in pairs(c:GetDescendants()) do
+                    if v:IsA("BasePart") then v.CanCollide = false end
+                end
+                if c:FindFirstChild("Humanoid") then
+                    -- Ép nhân vật vào trạng thái PlatformStanding để không bị giật hoạt động
+                    c.Humanoid.PlatformStand = true
+                    c.Humanoid:ChangeState(11)
+                end
             end
-            if c:FindFirstChild("Humanoid") then c.Humanoid:ChangeState(11) end
         end)
     end
 end)
 
+--- GIAO DIỆN ---
 local Window = Rayfield:CreateWindow({
-   Name = "🛡️ Chii Hauu HUB | V2",
-   LoadingTitle = "Đang kiểm tra bảo mật...",
+   Name = "🛡️ Chii Hauu HUB | ULTRA SMOOTH",
+   LoadingTitle = "Đang tối ưu hóa vật lý...",
    LoadingSubtitle = "by Chii Hauu",
    KeySystem = false
 })
@@ -145,33 +171,36 @@ local Tab = Window:CreateTab("💰 Auto Farm")
 
 Tab:CreateInput({
    Name = "Mật mã (Key)",
-   PlaceholderText = "Nhập Key tại đây...",
+   PlaceholderText = "Mã: ChiiHaudz",
    Callback = function(t)
       if t == _K then 
          _H = true 
-         Rayfield:Notify({Title = "XÁC MINH", Content = "Chào Chii Hauu! Đã mở khóa.", Duration = 5})
+         Rayfield:Notify({Title = "THÀNH CÔNG", Content = "Chào Chii Hauu! Chế độ mượt đã sẵn sàng.", Duration = 5})
       end
    end,
 })
 
 Tab:CreateToggle({
-   Name = "Bật Farm Rương + Đổi Server",
+   Name = "Nhặt Rương Không Giật + Tự Đổi Map",
    CurrentValue = false,
    Callback = function(v)
       if _H then
          _G.AutoFarmChest = v
          if v then _START() end
       else
-         Rayfield:Notify({Title = "CẢNH BÁO", Content = "Vui lòng nhập Key!", Duration = 5})
+         Rayfield:Notify({Title = "THIẾU KEY", Content = "Vui lòng nhập Key trước!", Duration = 5})
       end
    end,
 })
 
 Tab:CreateButton({
-   Name = "🛑 Hủy bỏ Script",
+   Name = "🛑 Tắt Script",
    Callback = function()
       _G.AutoFarmChest = false
       if CT then CT:Cancel() end
+      if PLR.Character and PLR.Character:FindFirstChild("Humanoid") then
+          PLR.Character.Humanoid.PlatformStand = false
+      end
       Rayfield:Destroy()
    end,
 })
