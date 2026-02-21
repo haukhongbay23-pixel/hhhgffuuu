@@ -1,0 +1,177 @@
+-- [[ CHII HAUU HUB - FINAL PROTECTED ]]
+local _PROTECT = {
+    ["K"] = {67, 104, 105, 105, 72, 97, 117, 100, 122}, -- ChiiHaudz
+    ["URL"] = "https://sirius.menu/rayfield",
+    ["S"] = 150
+}
+
+local function _DECODE(b)
+    local s = ""
+    for i = 1, #b do s = s .. string.char(b[i]) end
+    return s
+end
+
+local Rayfield = loadstring(game:HttpGet(_PROTECT["URL"]))()
+local _K = _DECODE(_PROTECT["K"])
+local _H = false
+
+_G.AutoFarmChest = false
+_G.IsTeleporting = false
+_G.FarmSpeed = _PROTECT["S"]
+
+local TS = game:GetService("TweenService")
+local CT = nil
+local PLR = game.Players.LocalPlayer
+local RUN = game:GetService("RunService")
+
+-- Chống giật & Trọng lực
+local function _GITTER()
+    pcall(function()
+        local r = PLR.Character and PLR.Character:FindFirstChild("HumanoidRootPart")
+        if r then
+            if not r:FindFirstChild("ChiiHauu_BV") then
+                local bv = Instance.new("BodyVelocity")
+                bv.Name = "ChiiHauu_BV"
+                bv.Velocity = Vector3.new(0, 0, 0)
+                bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                bv.Parent = r
+            end
+        end
+    end)
+end
+
+-- Tự động đổi Server
+local function _HOP()
+    Rayfield:Notify({Title = "HỆ THỐNG", Content = "Đang đổi Server mới...", Duration = 5})
+    local HTTP = game:GetService("HttpService")
+    local TELE = game:GetService("TeleportService")
+    pcall(function()
+        local list = HTTP:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+        for _, s in pairs(list.data) do
+            if s.playing < s.maxPlayers and s.id ~= game.JobId then
+                TELE:TeleportToPlaceInstance(game.PlaceId, s.id)
+                break
+            end
+        end
+    end)
+end
+
+-- Bay mượt
+local function _TWEEN(cf)
+    local root = PLR.Character and PLR.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        _GITTER()
+        if CT then CT:Cancel() end
+        local dist = (root.Position - cf.Position).Magnitude
+        CT = TS:Create(root, TweenInfo.new(dist/_G.FarmSpeed, Enum.EasingStyle.Linear), {CFrame = cf})
+        CT:Play()
+    end
+end
+
+-- Tìm rương thông minh (Fix lag)
+local function _FIND()
+    local t, m = nil, math.huge
+    local char = PLR.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+    local p = char.HumanoidRootPart.Position
+
+    -- Quét rương nhanh
+    for _, v in pairs(game.Workspace:GetChildren()) do
+        if v.Name:find("Chest") and v:IsA("BasePart") then
+            local d = (v.Position - p).Magnitude
+            if d < m then m = d; t = v end
+        end
+    end
+    -- Quét rương ẩn nếu rương ngoài đã hết
+    if not t then
+        for _, v in pairs(game.Workspace:GetDescendants()) do
+            if v.Name:find("Chest") and v:IsA("BasePart") then
+                local d = (v.Position - p).Magnitude
+                if d < m then m = d; t = v end
+            end
+        end
+    end
+    return t
+end
+
+function _START()
+    task.spawn(function()
+        while _G.AutoFarmChest do
+            task.wait()
+            local success, err = pcall(function()
+                local root = PLR.Character and PLR.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local chest = _FIND()
+                    if chest then
+                        _G.IsTeleporting = true
+                        _TWEEN(chest.CFrame * CFrame.new(0, 4, 0))
+                        while chest and chest.Parent and _G.AutoFarmChest do
+                            if (chest.Position - root.Position).Magnitude < 15 then break end
+                            task.wait()
+                        end
+                    else
+                        _G.IsTeleporting = false
+                        if CT then CT:Cancel() end
+                        _HOP()
+                        _G.AutoFarmChest = false -- Tạm dừng để nhảy server
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+-- Noclip & State Fix
+RUN.Stepped:Connect(function()
+    if _G.AutoFarmChest or _G.IsTeleporting then
+        pcall(function()
+            local c = PLR.Character
+            for _, v in pairs(c:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+            if c:FindFirstChild("Humanoid") then c.Humanoid:ChangeState(11) end
+        end)
+    end
+end)
+
+local Window = Rayfield:CreateWindow({
+   Name = "🛡️ Chii Hauu HUB | V2",
+   LoadingTitle = "Đang kiểm tra bảo mật...",
+   LoadingSubtitle = "by Chii Hauu",
+   KeySystem = false
+})
+
+local Tab = Window:CreateTab("💰 Auto Farm")
+
+Tab:CreateInput({
+   Name = "Mật mã (Key)",
+   PlaceholderText = "Nhập Key tại đây...",
+   Callback = function(t)
+      if t == _K then 
+         _H = true 
+         Rayfield:Notify({Title = "XÁC MINH", Content = "Chào Chii Hauu! Đã mở khóa.", Duration = 5})
+      end
+   end,
+})
+
+Tab:CreateToggle({
+   Name = "Bật Farm Rương + Đổi Server",
+   CurrentValue = false,
+   Callback = function(v)
+      if _H then
+         _G.AutoFarmChest = v
+         if v then _START() end
+      else
+         Rayfield:Notify({Title = "CẢNH BÁO", Content = "Vui lòng nhập Key!", Duration = 5})
+      end
+   end,
+})
+
+Tab:CreateButton({
+   Name = "🛑 Hủy bỏ Script",
+   Callback = function()
+      _G.AutoFarmChest = false
+      if CT then CT:Cancel() end
+      Rayfield:Destroy()
+   end,
+})
